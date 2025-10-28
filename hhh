@@ -1,0 +1,152 @@
+import pygame
+import random
+import sys
+
+# 配置
+CELL_SIZE = 20        # 每个格子像素
+GRID_WIDTH = 30       # 列数
+GRID_HEIGHT = 20      # 行数
+WINDOW_WIDTH = CELL_SIZE * GRID_WIDTH
+WINDOW_HEIGHT = CELL_SIZE * GRID_HEIGHT
+FPS_BASE = 8          # 初始帧率（速度）
+FPS_GROWTH = 0.5      # 随蛇长增长的速度增量（每增长一定长度增加）
+
+# 颜色
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+GREEN = (76, 187, 23)
+DARK_GREEN = (40, 140, 20)
+RED = (220, 20, 60)
+GRAY = (40, 40, 40)
+
+def random_food_position(snake):
+    """在不和蛇身体重合的位置随机生成食物坐标（格子坐标）。"""
+    while True:
+        x = random.randrange(0, GRID_WIDTH)
+        y = random.randrange(0, GRID_HEIGHT)
+        if (x, y) not in snake:
+            return (x, y)
+
+def draw_cell(surface, pos, color):
+    """在格子 pos 上绘制一个方块。pos 为 (x, y) 格坐标。"""
+    rect = pygame.Rect(pos[0] * CELL_SIZE, pos[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+    pygame.draw.rect(surface, color, rect)
+
+def main():
+    pygame.init()
+    screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+    pygame.display.set_caption("贪吃蛇 (Python + pygame)")
+    clock = pygame.time.Clock()
+    font = pygame.font.SysFont(None, 30)
+    big_font = pygame.font.SysFont(None, 54)
+
+    def new_game():
+        start_x = GRID_WIDTH // 2
+        start_y = GRID_HEIGHT // 2
+        snake = [(start_x, start_y), (start_x - 1, start_y), (start_x - 2, start_y)]
+        direction = (1, 0)  # 右
+        food = random_food_position(snake)
+        score = 0
+        alive = True
+        return snake, direction, food, score, alive
+
+    snake, direction, food, score, alive = new_game()
+    pending_direction = direction  # 防止同帧反向
+    frame_counter = 0
+
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    pygame.quit()
+                    sys.exit()
+                if event.key == pygame.K_r:
+                    snake, direction, food, score, alive = new_game()
+                    pending_direction = direction
+                # 方向控制（禁止直接反向）
+                if event.key == pygame.K_UP:
+                    if direction != (0, 1):
+                        pending_direction = (0, -1)
+                elif event.key == pygame.K_DOWN:
+                    if direction != (0, -1):
+                        pending_direction = (0, 1)
+                elif event.key == pygame.K_LEFT:
+                    if direction != (1, 0):
+                        pending_direction = (-1, 0)
+                elif event.key == pygame.K_RIGHT:
+                    if direction != (-1, 0):
+                        pending_direction = (1, 0)
+
+        if alive:
+            # 设置速度：随着蛇长增加，速度略微增长
+            fps = FPS_BASE + int(len(snake) * FPS_GROWTH)
+            clock.tick(fps)
+
+            # 更新方向（在移动前确认）
+            direction = pending_direction
+
+            # 计算新蛇头
+            head_x, head_y = snake[0]
+            dx, dy = direction
+            new_head = (head_x + dx, head_y + dy)
+
+            # 边界处理：当撞墙死亡（也可以改成穿墙）
+            nx, ny = new_head
+            if not (0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT):
+                alive = False
+            else:
+                # 自己咬到自己
+                if new_head in snake:
+                    alive = False
+                else:
+                    snake.insert(0, new_head)  # 加入新的头部
+                    # 吃到食物
+                    if new_head == food:
+                        score += 1
+                        food = random_food_position(snake)
+                    else:
+                        snake.pop()  # 正常移动，去掉尾部
+
+        else:
+            # 死亡时降低帧率避免占用过多 CPU
+            clock.tick(10)
+
+        # 绘制
+        screen.fill(BLACK)
+
+        # 网格（可选，便于观察）
+        for x in range(0, WINDOW_WIDTH, CELL_SIZE):
+            pygame.draw.line(screen, GRAY, (x, 0), (x, WINDOW_HEIGHT))
+        for y in range(0, WINDOW_HEIGHT, CELL_SIZE):
+            pygame.draw.line(screen, GRAY, (0, y), (WINDOW_WIDTH, y))
+
+        # 食物
+        draw_cell(screen, food, RED)
+
+        # 蛇
+        for i, segment in enumerate(snake):
+            color = DARK_GREEN if i == 0 else GREEN
+            draw_cell(screen, segment, color)
+
+        # 分数
+        score_surf = font.render(f"Score: {score}", True, WHITE)
+        screen.blit(score_surf, (8, 8))
+
+        if not alive:
+            # 显示 Game Over 和提示
+            go_surf = big_font.render("Game Over", True, WHITE)
+            go_rect = go_surf.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 20))
+            screen.blit(go_surf, go_rect)
+
+            hint_surf = font.render("Press R to restart, Esc to quit", True, WHITE)
+            hint_rect = hint_surf.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 20))
+            screen.blit(hint_surf, hint_rect)
+
+        pygame.display.flip()
+
+if __name__ == "__main__":
+    main()
